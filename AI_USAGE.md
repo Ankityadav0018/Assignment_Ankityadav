@@ -1,47 +1,50 @@
 # AI Usage Disclosure
 
-## Overview
-This document outlines the usage of AI tools during the development of **PolicyFlow**.
+This document describes how AI tools were used while building **PolicyFlow** and how I verified the output. I am responsible for all code in this repository.
 
 ---
 
-### 1. Tools and Models Used
-- **Primary AI Assistant**: [Fill in tool/model name, e.g. Claude 3.5 Sonnet / Antigravity / ChatGPT]
-- **IDE Extensions / CLI**: [Fill in details, e.g. Cursor / GitHub Copilot / Antigravity IDE]
-- **Dates / Duration of Use**: [Fill in date range]
+## 1. Tools Used
+- **Google Antigravity IDE** (model: `[model name shown in Antigravity]`): code generation from step-by-step prompts.
+- **Claude (claude.ai chat)**: breaking the assignment into small tasks, writing prompts, reviewing the README and design decisions.
+- Dates of use: `[start date]` to `[end date]`.
+- No other AI tools were used.
 
 ---
 
-### 2. Areas Where AI Was Utilized
-- [ ] **Architecture & Design**: [Describe any assistance in architectural design, state machine flow, or domain modeling]
-- [ ] **Boilerplate & Scaffolding**: [Describe initial Laravel files, migrations, models, enums]
-- [ ] **Core Business Logic**: [Describe implementation of PremiumCalculator, PolicyStateMachine, IssuanceService]
-- [ ] **Test Generation**: [Describe unit and feature test creation, concurrency scenarios, edge cases]
-- [ ] **Documentation**: [Describe README, API specifications, and code comments]
+## 2. How AI Helped
+1. **Scaffolding and boilerplate.** Antigravity generated the Laravel project, migrations, models, enums and controllers from small, separate prompts (scaffold, migrations, pricing, intake, state machine, mock insurer, submit workflow, callback, tests, docs). I committed after each step.
+2. **Core logic and tests.** Antigravity drafted `PremiumCalculator` (brick/math), `PolicyStateMachine`, `IssuanceService`, the mock insurer, and the unit/feature tests, including the concurrency test. I reviewed each file against the assignment before committing.
+3. **Design and documentation review.** Claude helped choose the reliability cases to implement, the in-process mock behind an `InsurerClient` interface (an app calling its own URL under `php artisan serve` can deadlock), and the use of the request UUID as the provider idempotency key. Claude also reviewed the README against the assignment checklist.
 
 ---
 
-### 3. Prompting Strategies & Workflow
-- **Key Prompts Used**:
-  > *[Placeholder: insert representative prompt 1]*
-  
-  > *[Placeholder: insert representative prompt 2]*
+## 3. Incorrect or Incomplete AI Output That I Corrected
+`[Keep only the items that really happened in your project and delete the rest. Add any real mistake you saw.]`
 
-- **Human Review & Verification**:
-  - [Describe how AI-generated code was reviewed, validated, and verified]
-  - [Describe specific edge cases or bugs caught and corrected during code reviews]
+1. **Wrong coverage tier.** Generated documentation listed `1000000` as a supported sum insured. The assignment allows only 100000, 300000 and 500000. I removed it everywhere and added a test that `1000000` returns 422.
+2. **Stuck state after timeout.** When the provider timed out and the status lookup found no policy, the request stayed in `NEEDS_RECONCILIATION` with no way to retry. I added a `NEEDS_RECONCILIATION → VALIDATED` transition for the "provider confirms not found" case and a test showing the retry produces exactly one policy with the original premium.
+3. **Silent duplicate with different data.** Repeating `agent_id + client_request_id` with a different payload returned the original record without any warning. I changed it to return 409 for a mismatched payload and 200 only for an identical one.
+4. **README problems.** The generated README contained a local absolute path, no example responses, and did not clearly state which reliability cases were implemented. I fixed these.
 
 ---
 
-### 4. Critical Corrections & Iterations
-- [Placeholder: Note any instances where AI suggestions were corrected or refined to adhere to business rules (e.g., brick/math decimal precision, TOCTOU race conditions, PCNTL database socket reconnects)]
+## 4. How I Verified the Output
+- Ran the full test suite after every change, against a real MySQL test database.
+- Ran every script in `examples/` against a running server for each mock scenario and checked the status codes.
+- Read `IssuanceService`, the state machine transition map and the callback handler line by line so I can explain them.
+- Checked the implementation and README against each requirement and acceptance criterion in the assignment.
+- Ran a cleanup audit to remove unused boilerplate, then re-ran the tests.
+- Searched the repo for secrets and personal paths, and confirmed `.env` is not tracked.
 
 ---
 
-### 5. Ethical & Compliance Considerations
-- **Proprietary Code / Secrets**: [State whether any private keys, real credentials, or sensitive data were shared]
-- **License Compliance**: [State compliance with open-source licenses and project requirements]
+## 5. Data and Licensing
+- No real credentials, API keys or customer data were shared with any AI tool. All customer data in tests and examples is fabricated.
+- `.env` is not committed. `.env.example` contains placeholders only.
+- Third-party packages (Laravel, brick/math and other Composer dependencies) are used under their open-source licenses.
+- Private chat transcripts are not included, as the assignment requests.
 
 ---
 
-**Author / Maintainer Signature**: `[Fill Name / Date]`
+**Author:** `[Full name]` / `[Candidate ID]` / `[Date]`
