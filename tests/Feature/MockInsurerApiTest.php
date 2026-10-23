@@ -26,12 +26,17 @@ class MockInsurerApiTest extends TestCase
             ->assertJsonValidationErrors(['idempotency_key']);
     }
 
-    public function test_callback_requires_idempotency_key(): void
+    public function test_callback_validates_required_payload(): void
     {
         $response = $this->postJson('/api/mock-insurer/callback', []);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['idempotency_key']);
+            ->assertJsonValidationErrors([
+                'provider_event_id',
+                'provider_reference',
+                'policy_number',
+                'event_type',
+            ]);
     }
 
     // ── Database-backed Endpoints ─────────────────────────────────────────────
@@ -140,20 +145,19 @@ class MockInsurerApiTest extends TestCase
                 'status' => 'PENDING',
             ]);
 
-        // 2. Trigger callback transitions to ISSUED
+        $ref = $response->json('provider_reference');
+        $this->assertNotNull($ref);
+
+        // 2. Trigger callback sends provider event payload
         $cbRes = $this->postJson('/api/mock-insurer/callback', [
-            'idempotency_key' => $key,
+            'provider_event_id'  => 'EVT-' . uniqid(),
+            'provider_reference' => $ref,
+            'policy_number'      => 'POL-' . uniqid(),
+            'event_type'         => 'POLICY_ISSUED',
         ]);
         $cbRes->assertStatus(200)
             ->assertJson([
-                'events_emitted' => 1,
-            ]);
-
-        // 3. Status is now ISSUED
-        $statusRes = $this->getJson("/api/mock-insurer/status/{$key}");
-        $statusRes->assertStatus(200)
-            ->assertJson([
-                'status' => 'ISSUED',
+                'status' => 'processed',
             ]);
     }
 

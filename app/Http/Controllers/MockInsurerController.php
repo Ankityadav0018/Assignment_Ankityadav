@@ -85,29 +85,16 @@ class MockInsurerController extends Controller
     /**
      * POST /api/mock-insurer/callback
      *
-     * Emits provider callback event(s) for a policy.
-     * Takes:
-     *   idempotency_key (required)
-     *   scenario        (optional override, e.g. DUPLICATE_CALLBACK)
-     *   target_url      (optional callback destination)
+     * Validates:
+     *   provider_event_id  (required, string)
+     *   provider_reference (required, string)
+     *   policy_number      (required, string)
+     *   event_type         (required, string)
      */
-    public function callback(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'idempotency_key' => ['required', 'string', 'max:255'],
-            'scenario'        => ['nullable', 'string', 'max:50'],
-            'target_url'      => ['nullable', 'string', 'url'],
-        ]);
-
-        $events = $this->mockInsurer->triggerCallback(
-            idempotencyKey: $validated['idempotency_key'],
-            scenario: $validated['scenario'] ?? $request->header('X-Mock-Scenario'),
-            targetUrl: $validated['target_url'] ?? null,
-        );
-
-        return response()->json([
-            'events_emitted' => count($events),
-            'events'         => $events,
-        ], 200);
+    public function callback(
+        \App\Http\Requests\ProviderCallbackRequest $request,
+        \App\Services\ProviderCallbackService $callbackService
+    ): JsonResponse {
+        return $callbackService->handle($request->validated());
     }
 }
