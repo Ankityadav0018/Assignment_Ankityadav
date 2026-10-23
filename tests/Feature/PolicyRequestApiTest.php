@@ -101,6 +101,17 @@ class PolicyRequestApiTest extends TestCase
             ->assertJsonValidationErrors(['sum_insured']);
     }
 
+    public function test_store_fails_when_sum_insured_is_1000000_returns_422(): void
+    {
+        $payload = $this->validPayload();
+        $payload['sum_insured'] = 1000000;
+
+        $response = $this->postJson('/api/policy-requests', $payload);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['sum_insured']);
+    }
+
     public function test_store_fails_for_unsupported_destination(): void
     {
         $payload = $this->validPayload();
@@ -177,6 +188,36 @@ class PolicyRequestApiTest extends TestCase
         $res2 = $this->postJson('/api/policy-requests', $payload);
         $res2->assertStatus(200);
         $this->assertSame($id1, $res2->json('data.id'));
+    }
+
+    public function test_store_returns_409_conflict_when_same_key_has_different_payload(): void
+    {
+        $this->requireDatabase();
+
+        $payload = $this->validPayload();
+
+        // First attempt -> 201
+        $res1 = $this->postJson('/api/policy-requests', $payload);
+        $res1->assertStatus(201);
+
+        // Same agent_id + client_request_id, but different customer_name -> 409
+        $conflictPayload = $payload;
+        $conflictPayload['customer_name'] = 'Different Customer';
+        $res2 = $this->postJson('/api/policy-requests', $conflictPayload);
+        $res2->assertStatus(409)
+            ->assertJsonPath('code', 'IDEMPOTENCY_KEY_PAYLOAD_MISMATCH');
+
+        // Same agent_id + client_request_id, but different sum_insured -> 409
+        $conflictPayload2 = $payload;
+        $conflictPayload2['sum_insured'] = 500000;
+        $res3 = $this->postJson('/api/policy-requests', $conflictPayload2);
+        $res3->assertStatus(409)
+            ->assertJsonPath('code', 'IDEMPOTENCY_KEY_PAYLOAD_MISMATCH');
+
+        // Identical payload still returns 200 with existing record
+        $res4 = $this->postJson('/api/policy-requests', $payload);
+        $res4->assertStatus(200);
+        $this->assertSame($res1->json('data.id'), $res4->json('data.id'));
     }
 
     public function test_show_returns_policy_request_with_audit_trail(): void

@@ -14,7 +14,7 @@ use App\Models\PolicyRequest;
  *  - VALIDATED            -> SUBMITTED
  *  - SUBMITTED            -> ISSUED | PENDING_CONFIRMATION | FAILED | NEEDS_RECONCILIATION | VALIDATED (retryable failure)
  *  - PENDING_CONFIRMATION -> ISSUED | FAILED | NEEDS_RECONCILIATION
- *  - NEEDS_RECONCILIATION -> ISSUED | FAILED (SUBMITTED is explicitly NOT allowed)
+ *  - NEEDS_RECONCILIATION -> ISSUED | FAILED | VALIDATED (provider confirmed not found) (SUBMITTED is explicitly NOT allowed)
  *  - ISSUED and FAILED are terminal states (no transitions permitted)
  */
 class PolicyStateMachine
@@ -44,6 +44,7 @@ class PolicyStateMachine
         PolicyStatus::NeedsReconciliation->value => [
             PolicyStatus::Issued->value,
             PolicyStatus::Failed->value,
+            PolicyStatus::Validated->value,
         ],
         PolicyStatus::Issued->value => [
             // Terminal — no transitions allowed

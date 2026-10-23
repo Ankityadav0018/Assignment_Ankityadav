@@ -37,10 +37,15 @@ class MockInsurer implements InsurerClient
 
     /**
      * Resolve the simulation scenario.
-     * Priority: explicit override > request header > config > default (SUCCESS).
+     * Scenario overrides and headers are honored ONLY in 'local' and 'testing'.
+     * In all other environments (e.g. production), they are ignored and SUCCESS is returned.
      */
     public function resolveScenario(?string $override = null): MockInsurerScenario
     {
+        if (! app()->environment(['local', 'testing'])) {
+            return MockInsurerScenario::Success;
+        }
+
         if ($override !== null && $override !== '') {
             return MockInsurerScenario::tryFrom(strtoupper(trim($override))) ?? MockInsurerScenario::Success;
         }
@@ -107,6 +112,15 @@ class MockInsurer implements InsurerClient
 
             throw new InsurerTimeoutException(
                 message: 'Provider connection timed out after issuance.',
+                idempotencyKey: $idempotencyKey,
+            );
+        }
+
+        // ── Scenario: TIMEOUT_WITHOUT_ISSUE / TIMEOUT_BEFORE_ISSUE ────────────
+        // Times out without creating any mock_policies row (status lookup returns 404 / null)
+        if ($resolvedScenario === MockInsurerScenario::TimeoutWithoutIssue || $resolvedScenario === MockInsurerScenario::TimeoutBeforeIssue) {
+            throw new InsurerTimeoutException(
+                message: 'Provider connection timed out before issuance.',
                 idempotencyKey: $idempotencyKey,
             );
         }

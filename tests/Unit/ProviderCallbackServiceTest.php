@@ -262,4 +262,58 @@ class ProviderCallbackServiceTest extends TestCase
         $policy->refresh();
         $this->assertSame(PolicyStatus::Failed, $policy->status);
     }
+
+    public function test_unknown_event_type_is_stored_and_returns_ignored_without_changing_state(): void
+    {
+        $this->requireDatabase();
+
+        $ref = 'REF-' . uniqid();
+        $policy = $this->createPolicy(PolicyStatus::PendingConfirmation, $ref);
+
+        $eventId = 'EVT-' . uniqid();
+
+        $response = $this->service->handle([
+            'provider_event_id'  => $eventId,
+            'provider_reference' => $ref,
+            'policy_number'      => 'POL-UNKNOWN-TEST',
+            'event_type'         => 'SOME_UNRECOGNIZED_EVENT_TYPE',
+        ]);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('ignored', $response->getData()->status);
+
+        // State is NOT changed
+        $policy->refresh();
+        $this->assertSame(PolicyStatus::PendingConfirmation, $policy->status);
+        $this->assertNull($policy->policy_number);
+
+        // Event is stored
+        $this->assertNotNull(ProviderEvent::where('provider_event_id', $eventId)->first());
+    }
+
+    public function test_failure_event_never_touches_issued_request(): void
+    {
+        $this->requireDatabase();
+
+        $ref = 'REF-' . uniqid();
+        $originalPolNo = 'POL-ORIGINAL-' . uniqid();
+        $policy = $this->createPolicy(PolicyStatus::Issued, $ref, $originalPolNo);
+
+        $eventId = 'EVT-' . uniqid();
+
+        $response = $this->service->handle([
+            'provider_event_id'  => $eventId,
+            'provider_reference' => $ref,
+            'policy_number'      => 'POL-FAILED-OVERWRITE',
+            'event_type'         => 'POLICY_FAILED',
+        ]);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('ignored', $response->getData()->status);
+
+        // Policy status remains ISSUED and policy number is untouched
+        $policy->refresh();
+        $this->assertSame(PolicyStatus::Issued, $policy->status);
+        $this->assertSame($originalPolNo, $policy->policy_number);
+    }
 }

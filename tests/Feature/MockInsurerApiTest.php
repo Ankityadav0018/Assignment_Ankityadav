@@ -63,6 +63,35 @@ class MockInsurerApiTest extends TestCase
             ]);
     }
 
+    public function test_scenario_flags_are_ignored_in_production(): void
+    {
+        $this->requireDatabase();
+
+        $originalEnv = $this->app->environment();
+
+        try {
+            $this->app['env'] = 'production';
+
+            $key = 'req-api-prod-' . uniqid();
+
+            // Request temporary failure via body and header in production
+            $response = $this->withHeader('X-Mock-Scenario', 'TEMPORARY_FAILURE')
+                ->postJson('/api/mock-insurer/issue', [
+                    'idempotency_key' => $key,
+                    'scenario'        => 'TEMPORARY_FAILURE',
+                ]);
+
+            // Flag must be ignored and default to SUCCESS (200 ISSUED)
+            $response->assertStatus(200)
+                ->assertJson([
+                    'success' => true,
+                    'status'  => 'ISSUED',
+                ]);
+        } finally {
+            $this->app['env'] = $originalEnv;
+        }
+    }
+
     public function test_issue_is_idempotent_via_api(): void
     {
         $this->requireDatabase();

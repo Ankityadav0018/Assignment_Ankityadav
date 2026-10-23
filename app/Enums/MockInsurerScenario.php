@@ -10,7 +10,9 @@ enum MockInsurerScenario: string
 {
     case Success           = 'SUCCESS';
     case TemporaryFailure  = 'TEMPORARY_FAILURE';
-    case TimeoutAfterIssue = 'TIMEOUT_AFTER_ISSUE';
-    case DelayedCallback   = 'DELAYED_CALLBACK';
-    case DuplicateCallback = 'DUPLICATE_CALLBACK';
+    case TimeoutAfterIssue   = 'TIMEOUT_AFTER_ISSUE';
+    case TimeoutWithoutIssue = 'TIMEOUT_WITHOUT_ISSUE';
+    case TimeoutBeforeIssue  = 'TIMEOUT_BEFORE_ISSUE';
+    case DelayedCallback     = 'DELAYED_CALLBACK';
+    case DuplicateCallback   = 'DUPLICATE_CALLBACK';
 }

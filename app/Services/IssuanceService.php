@@ -240,6 +240,23 @@ class IssuanceService
                     'outcome' => IssuanceOutcome::Failed,
                     'error'   => $policy->last_error,
                 ]);
+
+            } elseif ($lookup === null && $policy->status === PolicyStatus::NeedsReconciliation) {
+                // Provider confirmed not found (never received/issued)
+                // Return to VALIDATED so request can be safely retried
+                $policy->last_error = 'Provider confirmed not found after timeout.';
+                $policy->save();
+
+                $this->stateMachine->transition(
+                    $policy,
+                    PolicyStatus::Validated,
+                    'Provider confirmed no policy found after timeout; returned to VALIDATED for safe retry.'
+                );
+
+                $attempt?->update([
+                    'outcome' => IssuanceOutcome::RetryableFailure,
+                    'error'   => 'Provider confirmed not found after timeout.',
+                ]);
             }
         } catch (\Throwable) {
             // Lookup failed / still unreachable; policy remains in current state

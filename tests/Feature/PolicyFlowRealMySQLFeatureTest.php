@@ -140,6 +140,18 @@ class PolicyFlowRealMySQLFeatureTest extends TestCase
             ->assertJsonValidationErrors(['plan_code']);
     }
 
+    public function test_unsupported_sum_insured_1000000_returns_422(): void
+    {
+        $payload = $this->validPayload([
+            'sum_insured' => 1000000,
+        ]);
+
+        $response = $this->postJson('/api/policy-requests', $payload);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['sum_insured']);
+    }
+
     // ── 4. Repeated agent_id+client_request_id returns 200 and DB count stays 1
 
     public function test_repeated_agent_and_client_request_id_returns_200_and_db_count_stays_one(): void
@@ -161,6 +173,39 @@ class PolicyFlowRealMySQLFeatureTest extends TestCase
             ->where('client_request_id', $payload['client_request_id'])
             ->count();
 
+        $this->assertSame(1, $count);
+    }
+
+    public function test_repeated_agent_and_client_request_id_with_different_payload_returns_409(): void
+    {
+        $payload = $this->validPayload();
+
+        // 1st request -> 201 Created
+        $res1 = $this->postJson('/api/policy-requests', $payload);
+        $res1->assertStatus(201);
+
+        // 2nd request with same key but different customer_name -> 409 Conflict
+        $differentCustomer = $payload;
+        $differentCustomer['customer_name'] = 'Eve Adams';
+        $res2 = $this->postJson('/api/policy-requests', $differentCustomer);
+        $res2->assertStatus(409)
+            ->assertJsonPath('code', 'IDEMPOTENCY_KEY_PAYLOAD_MISMATCH');
+
+        // 3rd request with same key but different plan_code -> 409 Conflict
+        $differentPlan = $payload;
+        $differentPlan['plan_code'] = 'BASIC';
+        $res3 = $this->postJson('/api/policy-requests', $differentPlan);
+        $res3->assertStatus(409)
+            ->assertJsonPath('code', 'IDEMPOTENCY_KEY_PAYLOAD_MISMATCH');
+
+        // 4th request with identical payload -> 200 OK
+        $res4 = $this->postJson('/api/policy-requests', $payload);
+        $res4->assertStatus(200);
+
+        // DB count remains exactly 1
+        $count = PolicyRequest::where('agent_id', $payload['agent_id'])
+            ->where('client_request_id', $payload['client_request_id'])
+            ->count();
         $this->assertSame(1, $count);
     }
 
@@ -282,6 +327,86 @@ class PolicyFlowRealMySQLFeatureTest extends TestCase
         $this->assertNotNull($policy->policy_number);
     }
 
+    public function test_timeout_without_issue_reconciles_to_validated_and_retry_succeeds_with_same_premium(): void
+    {
+        $payload = $this->validPayload();
+        $createRes = $this->postJson('/api/policy-requests', $payload);
+        $id = $createRes->json('data.id');
+
+        // 1st submit: TIMEOUT_WITHOUT_ISSUE -> provider times out before creating policy
+        // IssuanceService transitions to NEEDS_RECONCILIATION, status lookup returns 404/null,
+        // transitions to VALIDATED (returns 503)
+        $submit1 = $this->postJson("/api/policy-requests/{$id}/submit", [
+            'scenario' => 'TIMEOUT_WITHOUT_ISSUE',
+        ]);
+        $submit1->assertStatus(503)
+            ->assertJsonPath('data.status', PolicyStatus::Validated->value)
+            ->assertJsonPath('data.premium_amount', '225.00');
+
+        $policyAfterTimeout = PolicyRequest::findOrFail($id);
+        $this->assertSame(PolicyStatus::Validated, $policyAfterTimeout->status);
+        $this->assertSame(1, $policyAfterTimeout->attempt_count);
+        $this->assertSame('225.00', $policyAfterTimeout->premium_amount);
+        $this->assertNull($policyAfterTimeout->policy_number);
+
+        // 0 mock_policies rows exist yet
+        $this->assertSame(0, MockPolicy::where('idempotency_key', $id)->count());
+
+        // 2nd submit: SUCCESS -> retry succeeds
+        $submit2 = $this->postJson("/api/policy-requests/{$id}/submit", [
+            'scenario' => 'SUCCESS',
+        ]);
+        $submit2->assertStatus(200)
+            ->assertJsonPath('data.status', PolicyStatus::Issued->value)
+            ->assertJsonPath('data.premium_amount', '225.00');
+
+        $policyAfterSuccess = PolicyRequest::findOrFail($id);
+        $this->assertSame(PolicyStatus::Issued, $policyAfterSuccess->status);
+        $this->assertNotNull($policyAfterSuccess->policy_number);
+        $this->assertSame('225.00', $policyAfterSuccess->premium_amount);
+        $this->assertSame(2, $policyAfterSuccess->attempt_count);
+
+        // Exactly ONE mock policy exists in the mock database
+        $this->assertSame(1, MockPolicy::where('idempotency_key', $id)->count());
+    }
+
+    public function test_issued_can_never_go_back_to_any_earlier_state(): void
+    {
+        $payload = $this->validPayload();
+        $createRes = $this->postJson('/api/policy-requests', $payload);
+        $id = $createRes->json('data.id');
+
+        $submitRes = $this->postJson("/api/policy-requests/{$id}/submit");
+        $submitRes->assertStatus(200);
+
+        $policy = PolicyRequest::findOrFail($id);
+        $this->assertSame(PolicyStatus::Issued, $policy->status);
+
+        $stateMachine = app(\App\Services\PolicyStateMachine::class);
+        $earlierStates = [
+            PolicyStatus::Received,
+            PolicyStatus::Validated,
+            PolicyStatus::Submitted,
+            PolicyStatus::PendingConfirmation,
+            PolicyStatus::NeedsReconciliation,
+        ];
+
+        foreach ($earlierStates as $earlierState) {
+            $this->assertFalse(
+                $stateMachine->canTransition(PolicyStatus::Issued, $earlierState),
+                "ISSUED must never transition back to {$earlierState->value}"
+            );
+
+            try {
+                $stateMachine->transition($policy, $earlierState);
+                $this->fail("Expected InvalidTransitionException transitioning ISSUED to {$earlierState->value}");
+            } catch (\App\Exceptions\InvalidTransitionException $e) {
+                $this->assertSame(PolicyStatus::Issued, $e->from);
+                $this->assertSame($earlierState, $e->to);
+            }
+        }
+    }
+
     // ── 9. DUPLICATE_CALLBACK applies once ────────────────────────────────────
 
     public function test_duplicate_callback_applies_once_and_has_single_issued_transition(): void
@@ -370,6 +495,81 @@ class PolicyFlowRealMySQLFeatureTest extends TestCase
         $policy = PolicyRequest::findOrFail($id);
         $this->assertSame(PolicyStatus::Issued, $policy->status);
         $this->assertSame($originalPolNo, $policy->policy_number);
+    }
+
+    public function test_unknown_event_type_callback_is_stored_and_returns_ignored_without_state_change(): void
+    {
+        $payload = $this->validPayload();
+        $createRes = $this->postJson('/api/policy-requests', $payload);
+        $id = $createRes->json('data.id');
+
+        $submitRes = $this->postJson("/api/policy-requests/{$id}/submit", [
+            'scenario' => 'DELAYED_CALLBACK',
+        ]);
+        $ref = $submitRes->json('data.provider_reference');
+
+        $eventId = 'EVT-UNKNOWN-' . uniqid();
+        $cbRes = $this->postJson('/api/mock-insurer/callback', [
+            'provider_event_id'  => $eventId,
+            'provider_reference' => $ref,
+            'policy_number'      => 'POL-UNKNOWN-TEST',
+            'event_type'         => 'CUSTOM_UNKNOWN_NOTIFICATION',
+        ]);
+
+        $cbRes->assertStatus(200)
+            ->assertJsonPath('status', 'ignored');
+
+        // State remains PENDING_CONFIRMATION
+        $policy = PolicyRequest::findOrFail($id);
+        $this->assertSame(PolicyStatus::PendingConfirmation, $policy->status);
+        $this->assertNull($policy->policy_number);
+
+        // Event is stored
+        $this->assertSame(1, ProviderEvent::where('provider_event_id', $eventId)->count());
+    }
+
+    public function test_failure_callback_event_moves_pending_confirmation_to_failed_but_never_touches_issued(): void
+    {
+        // 1. PENDING_CONFIRMATION -> FAILED on POLICY_FAILED event
+        $payload = $this->validPayload();
+        $createRes = $this->postJson('/api/policy-requests', $payload);
+        $id1 = $createRes->json('data.id');
+
+        $submitRes1 = $this->postJson("/api/policy-requests/{$id1}/submit", [
+            'scenario' => 'DELAYED_CALLBACK',
+        ]);
+        $ref1 = $submitRes1->json('data.provider_reference');
+
+        $failEventId = 'EVT-FAIL-' . uniqid();
+        $cbFail = $this->postJson('/api/mock-insurer/callback', [
+            'provider_event_id'  => $failEventId,
+            'provider_reference' => $ref1,
+            'policy_number'      => 'POL-FAILED',
+            'event_type'         => 'POLICY_FAILED',
+        ]);
+        $cbFail->assertStatus(200)->assertJsonPath('status', 'processed');
+
+        $policy1 = PolicyRequest::findOrFail($id1);
+        $this->assertSame(PolicyStatus::Failed, $policy1->status);
+
+        // 2. Failure event arriving for already ISSUED policy -> stored but ignored
+        $createRes2 = $this->postJson('/api/policy-requests', $this->validPayload());
+        $id2 = $createRes2->json('data.id');
+        $submitRes2 = $this->postJson("/api/policy-requests/{$id2}/submit"); // ISSUED
+        $originalPolNo2 = $submitRes2->json('data.policy_number');
+        $ref2 = $submitRes2->json('data.provider_reference');
+
+        $cbFailOnIssued = $this->postJson('/api/mock-insurer/callback', [
+            'provider_event_id'  => 'EVT-FAIL-ISSUED-' . uniqid(),
+            'provider_reference' => $ref2,
+            'policy_number'      => 'POL-ROGUE-FAIL',
+            'event_type'         => 'POLICY_FAILED',
+        ]);
+        $cbFailOnIssued->assertStatus(200)->assertJsonPath('status', 'ignored');
+
+        $policy2 = PolicyRequest::findOrFail($id2);
+        $this->assertSame(PolicyStatus::Issued, $policy2->status);
+        $this->assertSame($originalPolNo2, $policy2->policy_number);
     }
 
     // ── 11. Repeated submit on ISSUED makes zero provider calls ───────────────
@@ -471,5 +671,33 @@ class PolicyFlowRealMySQLFeatureTest extends TestCase
             ->count();
 
         $this->assertSame(1, $count, 'Concurrent inserts must result in exactly 1 row in policy_requests');
+    }
+
+    public function test_scenario_flags_are_ignored_in_production_environment_on_submit(): void
+    {
+        $payload = $this->validPayload();
+        $createRes = $this->postJson('/api/policy-requests', $payload);
+        $id = $createRes->json('data.id');
+
+        $originalEnv = $this->app->environment();
+
+        try {
+            $this->app['env'] = 'production';
+
+            // Send TEMPORARY_FAILURE in production -> must be ignored and default to SUCCESS (200 ISSUED)
+            $submitRes = $this->withHeader('X-Mock-Scenario', 'TEMPORARY_FAILURE')
+                ->postJson("/api/policy-requests/{$id}/submit", [
+                    'scenario' => 'TEMPORARY_FAILURE',
+                ]);
+
+            $submitRes->assertStatus(200)
+                ->assertJsonPath('data.status', PolicyStatus::Issued->value);
+
+            $policy = PolicyRequest::findOrFail($id);
+            $this->assertSame(PolicyStatus::Issued, $policy->status);
+            $this->assertNotNull($policy->policy_number);
+        } finally {
+            $this->app['env'] = $originalEnv;
+        }
     }
 }

@@ -95,6 +95,13 @@ class ProviderCallbackService
                         PolicyStatus::Failed,
                         'Failed via provider callback event.'
                     );
+                } elseif (! $isSuccessEvent && ! $isFailureEvent) {
+                    $event->markProcessed();
+
+                    return response()->json([
+                        'status'  => 'ignored',
+                        'message' => 'Unknown event_type; event stored and ignored.',
+                    ], 200);
                 }
 
                 $event->markProcessed();

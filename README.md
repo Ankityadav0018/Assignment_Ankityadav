@@ -348,7 +348,7 @@ In a high-throughput production environment, synchronous retries can lead to thr
 4. **Mock Scenario Triggers**:
    - Testing scenarios (`SUCCESS`, `TEMPORARY_FAILURE`, `TIMEOUT_AFTER_ISSUE`, `DELAYED_CALLBACK`, `DUPLICATE_CALLBACK`) are triggered via request parameter or header for local and testing environments only; production environments default to live insurer behavior.
 5. **Sum Insured Tiers**:
-   - The supported coverage amounts are discrete integers: `100000`, `300000`, `500000`, `1000000`.
+   - The supported coverage amounts are discrete integers: `100000`, `300000`, `500000`.
 
 ---
 

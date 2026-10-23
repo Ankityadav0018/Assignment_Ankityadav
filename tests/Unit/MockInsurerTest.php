@@ -80,6 +80,24 @@ class MockInsurerTest extends TestCase
         $this->assertSame(MockInsurerScenario::TimeoutAfterIssue, $scenario2);
     }
 
+    public function test_scenario_flags_are_ignored_in_production_environment(): void
+    {
+        $originalEnv = $this->app->environment();
+
+        try {
+            $this->app['env'] = 'production';
+            $this->assertTrue($this->app->environment('production'));
+
+            $scenario = $this->insurer->resolveScenario('TEMPORARY_FAILURE');
+            $this->assertSame(MockInsurerScenario::Success, $scenario);
+
+            $scenario2 = $this->insurer->resolveScenario('TIMEOUT_AFTER_ISSUE');
+            $this->assertSame(MockInsurerScenario::Success, $scenario2);
+        } finally {
+            $this->app['env'] = $originalEnv;
+        }
+    }
+
     // ── 3. Scenario: TEMPORARY_FAILURE ───────────────────────────────────────
 
     public function test_temporary_failure_returns_retriable_error(): void

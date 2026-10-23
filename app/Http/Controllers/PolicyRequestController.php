@@ -99,13 +99,40 @@ class PolicyRequestController extends Controller
                 ->setStatusCode(201);
 
         } catch (UniqueConstraintViolationException) {
-            // Duplicate (agent_id, client_request_id) — return the existing row.
-            // The premium has already been calculated above; we discard it and
-            // return whatever was committed on the original request.
+            // Duplicate (agent_id, client_request_id)
             $existing = PolicyRequest::where('agent_id', $data['agent_id'])
                 ->where('client_request_id', $data['client_request_id'])
                 ->with('stateHistory')
                 ->firstOrFail();
+
+            // Compare incoming payload against existing row:
+            // customer_name, date_of_birth, destination, trip dates, plan_code, sum_insured
+            $existingDob   = $existing->date_of_birth?->toDateString();
+            $incomingDob   = CarbonImmutable::parse($data['date_of_birth'])->toDateString();
+            $existingStart = $existing->trip_start?->toDateString();
+            $incomingStart = CarbonImmutable::parse($data['trip_start'])->toDateString();
+            $existingEnd   = $existing->trip_end?->toDateString();
+            $incomingEnd   = CarbonImmutable::parse($data['trip_end'])->toDateString();
+            $existingDest  = $existing->destination instanceof Destination ? $existing->destination->value : (string) $existing->destination;
+            $existingPlan  = (string) $existing->plan_code;
+            $existingSum   = (int) $existing->sum_insured;
+
+            $matches = (
+                $existing->customer_name === $data['customer_name'] &&
+                $existingDob === $incomingDob &&
+                strtoupper($existingDest) === $destination->value &&
+                $existingStart === $incomingStart &&
+                $existingEnd === $incomingEnd &&
+                strtoupper($existingPlan) === $planCode &&
+                $existingSum === (int) $data['sum_insured']
+            );
+
+            if (! $matches) {
+                return response()->json([
+                    'error'   => 'Conflict: A policy request with this agent_id and client_request_id already exists with different payload parameters.',
+                    'code'    => 'IDEMPOTENCY_KEY_PAYLOAD_MISMATCH',
+                ], 409);
+            }
 
             return PolicyRequestResource::make($existing)
                 ->response()
@@ -168,7 +195,9 @@ class PolicyRequestController extends Controller
      */
     public function submit(Request $request, string $id, IssuanceService $issuanceService): JsonResponse
     {
-        $scenario = $request->input('scenario') ?? $request->header('X-Mock-Scenario');
+        $scenario = app()->environment(['local', 'testing'])
+            ? ($request->input('scenario') ?? $request->header('X-Mock-Scenario'))
+            : null;
 
         try {
             $policy = $issuanceService->submit($id, $scenario);

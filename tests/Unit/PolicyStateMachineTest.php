@@ -45,6 +45,7 @@ class PolicyStateMachineTest extends TestCase
             'PENDING_CONFIRMATION -> NEEDS_RECONCILIATION'       => [PolicyStatus::PendingConfirmation, PolicyStatus::NeedsReconciliation],
             'NEEDS_RECONCILIATION -> ISSUED'                     => [PolicyStatus::NeedsReconciliation, PolicyStatus::Issued],
             'NEEDS_RECONCILIATION -> FAILED'                     => [PolicyStatus::NeedsReconciliation, PolicyStatus::Failed],
+            'NEEDS_RECONCILIATION -> VALIDATED'                  => [PolicyStatus::NeedsReconciliation, PolicyStatus::Validated],
         ];
     }
 
@@ -211,6 +212,35 @@ class PolicyStateMachineTest extends TestCase
             } catch (InvalidTransitionException $e) {
                 $this->assertSame(PolicyStatus::Issued, $e->from);
                 $this->assertSame($target, $e->to);
+            }
+        }
+    }
+
+    public function test_issued_can_never_go_back_to_any_earlier_state(): void
+    {
+        $earlierStates = [
+            PolicyStatus::Received,
+            PolicyStatus::Validated,
+            PolicyStatus::Submitted,
+            PolicyStatus::PendingConfirmation,
+            PolicyStatus::NeedsReconciliation,
+        ];
+
+        foreach ($earlierStates as $earlierState) {
+            $this->assertFalse(
+                $this->stateMachine->canTransition(PolicyStatus::Issued, $earlierState),
+                "ISSUED should never be permitted to transition back to {$earlierState->value}"
+            );
+
+            $policy = new PolicyRequest();
+            $policy->status = PolicyStatus::Issued;
+
+            try {
+                $this->stateMachine->transition($policy, $earlierState);
+                $this->fail("Expected InvalidTransitionException transitioning ISSUED -> {$earlierState->value}");
+            } catch (InvalidTransitionException $e) {
+                $this->assertSame(PolicyStatus::Issued, $e->from);
+                $this->assertSame($earlierState, $e->to);
             }
         }
     }

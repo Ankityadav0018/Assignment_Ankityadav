@@ -31,7 +31,9 @@ class MockInsurerController extends Controller
         ]);
 
         $idempotencyKey = $validated['idempotency_key'];
-        $scenario       = $validated['scenario'] ?? $request->header('X-Mock-Scenario');
+        $scenario       = app()->environment(['local', 'testing'])
+            ? ($validated['scenario'] ?? $request->header('X-Mock-Scenario'))
+            : null;
         $payload        = $validated['payload'] ?? [];
 
         try {

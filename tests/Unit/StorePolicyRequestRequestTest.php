@@ -138,6 +138,15 @@ class StorePolicyRequestRequestTest extends TestCase
         $this->assertTrue($validator->errors()->has('sum_insured'));
     }
 
+    public function test_sum_insured_1000000_fails_validation(): void
+    {
+        $payload = $this->validPayload();
+        $payload['sum_insured'] = 1000000;
+        $validator = $this->validate($payload);
+        $this->assertTrue($validator->fails());
+        $this->assertTrue($validator->errors()->has('sum_insured'));
+    }
+
     public function test_destination_must_be_domestic_or_international(): void
     {
         $payload = $this->validPayload();

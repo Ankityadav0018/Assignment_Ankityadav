@@ -260,6 +260,40 @@ class IssuanceServiceTest extends TestCase
         $this->assertSame('POL-RECOVERED', $result->policy_number);
     }
 
+    public function test_timeout_with_no_policy_at_provider_reconciles_to_validated_for_retry(): void
+    {
+        $this->requireDatabase();
+
+        $policy = $this->createTestPolicy(PolicyStatus::Validated);
+
+        // 1. Issue throws timeout
+        $this->insurer->shouldReceive('issue')
+            ->once()
+            ->andThrow(new InsurerTimeoutException('Gateway timeout before receipt', $policy->id));
+
+        // 2. Lookup returns null (provider never received/issued it -> 404)
+        $this->insurer->shouldReceive('lookup')
+            ->once()
+            ->with($policy->id)
+            ->andReturn(null);
+
+        $result = $this->service->submit($policy->id);
+
+        // Status moved to VALIDATED (not stuck in NEEDS_RECONCILIATION)
+        $this->assertSame(PolicyStatus::Validated, $result->status);
+        $this->assertSame(1, $result->attempt_count);
+
+        // 3. Retry succeeds
+        $this->insurer->shouldReceive('issue')
+            ->once()
+            ->andReturn(InsurerResponse::success('POL-RETRY-SUCCESS', 'REF-RETRY-SUCCESS'));
+
+        $retryResult = $this->service->submit($policy->id);
+        $this->assertSame(PolicyStatus::Issued, $retryResult->status);
+        $this->assertSame('POL-RETRY-SUCCESS', $retryResult->policy_number);
+        $this->assertSame(2, $retryResult->attempt_count);
+    }
+
     public function test_repeated_submit_calls_never_call_provider_issue_again(): void
     {
         $this->requireDatabase();
