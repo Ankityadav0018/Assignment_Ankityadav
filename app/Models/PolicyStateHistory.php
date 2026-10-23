@@ -25,6 +25,8 @@ class PolicyStateHistory extends Model
     // This table is append-only; there is no updated_at column.
     const UPDATED_AT = null;
 
+    protected $table = 'policy_state_history';
+
     protected $fillable = [
         'policy_request_id',
         'from_status',

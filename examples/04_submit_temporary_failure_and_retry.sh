@@ -16,7 +16,7 @@ INTAKE_RESP=$(curl -s -X POST "${BASE_URL}/api/policy-requests" \
     "agent_id": "'"${AGENT_ID}"'",
     "customer_name": "Diana Prince",
     "date_of_birth": "1992-03-20",
-    "destination": "SCHENGEN",
+    "destination": "INTERNATIONAL",
     "trip_start": "2024-08-01",
     "trip_end": "2024-08-15",
     "plan_code": "PREMIUM",
