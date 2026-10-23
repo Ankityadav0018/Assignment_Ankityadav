@@ -8,37 +8,47 @@ namespace App\Enums;
  * ┌──────────┐
  * │ RECEIVED │  Record inserted; raw input accepted.
  * └─────┬────┘
- *       │ validation + premium calculation OK
+ *       │
  * ┌─────▼─────┐
- * │ VALIDATED │  All fields valid, premium snapshot stored.
+ * │ VALIDATED │  Validated; premium snapshot stored.
  * └─────┬─────┘
- *       │ submit to provider
- * ┌─────▼──────┐
- * │ PROCESSING │  Request sent to provider, awaiting response.
- * └─────┬──────┘
- *       ├─ success ──► ISSUED
- *       ├─ soft error ► RETRYING
- *       └─ hard error ► FAILED
- *
- * RETRYING re-enters PROCESSING on each retry attempt.
+ *       │
+ * ┌─────▼─────┐  retryable failure
+ * │ SUBMITTED ├─────────────────────────┐
+ * └─────┬─────┘                         │
+ *       │                               │
+ *       ├──────────────┬────────────────┴────────────┐
+ *       │              │                             │
+ * ┌─────▼─────┐ ┌──────▼──────────────┐ ┌────────────▼─────────┐
+ * │   ISSUED  │ │ PENDING_CONFIRMATION│ │ NEEDS_RECONCILIATION │
+ * │ (terminal)│ └──────┬──────────────┘ └────────────┬─────────┘
+ * └───────────┘        │                             │
+ *       ▲              ├─────────────────────────────┤
+ *       │              │                             │
+ *       │       ┌──────▼─────┐                       │
+ *       └───────┤   FAILED   │◄──────────────────────┘
+ *               │ (terminal) │
+ *               └────────────┘
  */
 enum PolicyStatus: string
 {
-    case Received   = 'RECEIVED';
-    case Validated  = 'VALIDATED';
-    case Processing = 'PROCESSING';
-    case Retrying   = 'RETRYING';
-    case Issued     = 'ISSUED';
-    case Failed     = 'FAILED';
-    case Cancelled  = 'CANCELLED';
+    case Received            = 'RECEIVED';
+    case Validated           = 'VALIDATED';
+    case Submitted           = 'SUBMITTED';
+    case Issued              = 'ISSUED';
+    case PendingConfirmation = 'PENDING_CONFIRMATION';
+    case Failed              = 'FAILED';
+    case NeedsReconciliation = 'NEEDS_RECONCILIATION';
 
+    /**
+     * Determine if this state is terminal (no further transitions permitted).
+     */
     public function isTerminal(): bool
     {
         return match ($this) {
             self::Issued,
-            self::Failed,
-            self::Cancelled => true,
-            default         => false,
+            self::Failed => true,
+            default      => false,
         };
     }
 }

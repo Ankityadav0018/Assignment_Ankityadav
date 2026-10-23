@@ -7,6 +7,7 @@ use App\Enums\PolicyStatus;
 use App\Http\Requests\StorePolicyRequestRequest;
 use App\Http\Resources\PolicyRequestResource;
 use App\Models\PolicyRequest;
+use App\Services\PolicyStateMachine;
 use App\Services\PremiumCalculator;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -18,7 +19,8 @@ use Illuminate\Support\Facades\DB;
 class PolicyRequestController extends Controller
 {
     public function __construct(
-        private readonly PremiumCalculator $calculator,
+        private readonly PremiumCalculator  $calculator,
+        private readonly PolicyStateMachine $stateMachine,
     ) {}
 
     // ── POST /api/policy-requests ─────────────────────────────────────────────
@@ -79,16 +81,12 @@ class PolicyRequestController extends Controller
                     'reason'      => 'Policy request received.',
                 ]);
 
-                // 3. Transition to VALIDATED.
-                $pr->status = PolicyStatus::Validated;
-                $pr->save();
-
-                // 4. Record VALIDATED transition.
-                $pr->stateHistory()->create([
-                    'from_status' => PolicyStatus::Received->value,
-                    'to_status'   => PolicyStatus::Validated->value,
-                    'reason'      => 'Input validated; premium calculated and snapshot stored.',
-                ]);
+                // 3. Transition to VALIDATED via the state machine.
+                $this->stateMachine->transition(
+                    $pr,
+                    PolicyStatus::Validated,
+                    'Input validated; premium calculated and snapshot stored.'
+                );
 
                 $pr->load('stateHistory');
 
