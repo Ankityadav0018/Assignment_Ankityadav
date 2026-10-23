@@ -20,8 +20,12 @@ final class PremiumCalculator
 {
     // ── Constants ─────────────────────────────────────────────────────────────
 
-    /** Base daily rate in currency units (integer strings, no floats). */
-    private const DAILY_RATES = [
+    /**
+     * Supported plan codes mapped to their base daily rate (string, no floats).
+     * Public so StorePolicyRequestRequest can reference this as the single
+     * source of truth for allowed plan codes.
+     */
+    public const SUPPORTED_PLANS = [
         'BASIC'   => '12',
         'PLUS'    => '20',
         'PREMIUM' => '30',
@@ -50,8 +54,12 @@ final class PremiumCalculator
         'INTERNATIONAL' => '1.80',
     ];
 
-    /** Coverage (sum insured) multipliers — keyed by integer amount. */
-    private const COVERAGE_MULTIPLIERS = [
+    /**
+     * Supported sum insured values mapped to their coverage multiplier.
+     * Public so StorePolicyRequestRequest can reference this as the single
+     * source of truth for allowed coverage amounts.
+     */
+    public const SUPPORTED_COVERAGES = [
         100_000 => '1.00',
         300_000 => '1.25',
         500_000 => '1.50',
@@ -80,26 +88,26 @@ final class PremiumCalculator
         // ── 1. Validate & resolve plan rate ──────────────────────────────────
         $planCode = strtoupper(trim($planCode));
 
-        if (! array_key_exists($planCode, self::DAILY_RATES)) {
+        if (! array_key_exists($planCode, self::SUPPORTED_PLANS)) {
             throw new \DomainException(sprintf(
                 'Unsupported plan code "%s". Supported plans: %s.',
                 $planCode,
-                implode(', ', array_keys(self::DAILY_RATES)),
+                implode(', ', array_keys(self::SUPPORTED_PLANS)),
             ));
         }
 
-        $dailyRate = BigDecimal::of(self::DAILY_RATES[$planCode]);
+        $dailyRate = BigDecimal::of(self::SUPPORTED_PLANS[$planCode]);
 
         // ── 2. Validate & resolve coverage multiplier ─────────────────────────
-        if (! array_key_exists($sumInsured, self::COVERAGE_MULTIPLIERS)) {
+        if (! array_key_exists($sumInsured, self::SUPPORTED_COVERAGES)) {
             throw new \DomainException(sprintf(
                 'Unsupported sum insured %d. Supported values: %s.',
                 $sumInsured,
-                implode(', ', array_keys(self::COVERAGE_MULTIPLIERS)),
+                implode(', ', array_keys(self::SUPPORTED_COVERAGES)),
             ));
         }
 
-        $coverageMultiplier = BigDecimal::of(self::COVERAGE_MULTIPLIERS[$sumInsured]);
+        $coverageMultiplier = BigDecimal::of(self::SUPPORTED_COVERAGES[$sumInsured]);
 
         // ── 3. Travel days (inclusive, minimum 1) ─────────────────────────────
         $start    = CarbonImmutable::instance($tripStart)->startOfDay();
