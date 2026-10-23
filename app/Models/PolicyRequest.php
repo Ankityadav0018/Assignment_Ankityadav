@@ -19,9 +19,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property \Carbon\Carbon  $trip_end
  * @property int             $travel_days
  * @property string          $plan_code
- * @property float           $sum_insured
- * @property float           $premium_amount
- * @property array           $premium_breakdown   Immutable multiplier snapshot.
+ * @property string          $sum_insured      Laravel decimal cast returns string, not float.
+ * @property string          $premium_amount   Laravel decimal cast returns string, not float.
+ * @property array           $premium_breakdown  Immutable multiplier snapshot — set once on creation.
  * @property PolicyStatus    $status
  * @property int             $attempt_count
  * @property string|null     $provider_reference
@@ -34,6 +34,23 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PolicyRequest extends Model
 {
     use HasUuids;
+
+    /**
+     * Enforce immutability of premium_breakdown after the record is persisted.
+     * Any attempt to dirty it on an existing model will throw a RuntimeException.
+     */
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::updating(function (self $model): void {
+            if ($model->isDirty('premium_breakdown')) {
+                throw new \RuntimeException(
+                    'premium_breakdown is immutable and cannot be changed after creation.'
+                );
+            }
+        });
+    }
 
     protected $fillable = [
         'client_request_id',
@@ -62,9 +79,10 @@ class PolicyRequest extends Model
         'trip_end'               => 'date',
         'destination'            => Destination::class,
         'status'                 => PolicyStatus::class,
+        // 'decimal:N' cast preserves precision as a string — do not cast to float.
         'premium_amount'         => 'decimal:2',
         'sum_insured'            => 'decimal:2',
-        // Immutable after creation — never update this column directly.
+        // Immutable after creation — guarded by the updating() event in boot().
         'premium_breakdown'      => 'array',
         'last_provider_response' => 'array',
         'attempt_count'          => 'integer',

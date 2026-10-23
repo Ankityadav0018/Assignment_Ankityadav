@@ -22,12 +22,14 @@
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="mysql"/>
-        <env name="DB_HOST" value="127.0.0.1"/>
-        <env name="DB_PORT" value="3306"/>
-        <env name="DB_DATABASE" value="policyflow_test"/>
-        <env name="DB_USERNAME" value="your_db_username"/>
-        <env name="DB_PASSWORD" value="your_db_password"/>
+        <!-- DB_* use force="false" so .env.testing or CI env vars always win
+             over these committed placeholder values. -->
+        <env name="DB_CONNECTION" value="mysql"        force="false"/>
+        <env name="DB_HOST"       value="127.0.0.1"    force="false"/>
+        <env name="DB_PORT"       value="3306"         force="false"/>
+        <env name="DB_DATABASE"   value="policyflow_test" force="false"/>
+        <env name="DB_USERNAME"   value="your_db_username" force="false"/>
+        <env name="DB_PASSWORD"   value="your_db_password" force="false"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
