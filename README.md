@@ -18,6 +18,7 @@ PolicyFlow is a travel insurance policy intake and issuance API built with **Lar
 11. [Assumptions](#assumptions)
 12. [Known Limitations](#known-limitations)
 13. [Running Tests & Examples](#running-tests--examples)
+14. [Author](#author)
 
 ---
 
@@ -886,3 +887,11 @@ Executable curl scripts demonstrating every scenario are provided in [examples/]
 # 8. Late callback ignored without overwriting ISSUED
 ./examples/08_late_callback_ignored.sh
 ```
+
+---
+
+## Author
+- **Name**: Ankit Yadav
+- **Registration Number**: 12320498
+
+
