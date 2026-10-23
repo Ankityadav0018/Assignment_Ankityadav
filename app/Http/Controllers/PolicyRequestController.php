@@ -7,6 +7,7 @@ use App\Enums\PolicyStatus;
 use App\Http\Requests\StorePolicyRequestRequest;
 use App\Http\Resources\PolicyRequestResource;
 use App\Models\PolicyRequest;
+use App\Services\IssuanceService;
 use App\Services\PolicyStateMachine;
 use App\Services\PremiumCalculator;
 use Carbon\CarbonImmutable;
@@ -158,5 +159,36 @@ class PolicyRequestController extends Controller
         // State history is intentionally NOT loaded here to avoid N+1.
         // Use the GET /api/policy-requests/{id} endpoint for the audit trail.
         return PolicyRequestResource::collection($query->paginate($perPage));
+    }
+
+    // ── POST /api/policy-requests/{id}/submit ─────────────────────────────────
+
+    /**
+     * Submit a validated policy request for insurer issuance.
+     */
+    public function submit(Request $request, string $id, IssuanceService $issuanceService): JsonResponse
+    {
+        $scenario = $request->input('scenario') ?? $request->header('X-Mock-Scenario');
+
+        try {
+            $policy = $issuanceService->submit($id, $scenario);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return response()->json(['error' => 'Policy request not found.'], 404);
+        } catch (\DomainException $e) {
+            return response()->json(['error' => $e->getMessage()], 409);
+        }
+
+        $statusCode = match ($policy->status) {
+            PolicyStatus::Issued              => 200,
+            PolicyStatus::PendingConfirmation => 202,
+            PolicyStatus::Validated           => 503, // retriable provider failure
+            PolicyStatus::NeedsReconciliation => 504, // timeout
+            PolicyStatus::Failed              => 409,
+            default                           => 200,
+        };
+
+        return PolicyRequestResource::make($policy)
+            ->response()
+            ->setStatusCode($statusCode);
     }
 }

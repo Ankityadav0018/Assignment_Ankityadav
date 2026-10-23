@@ -16,6 +16,9 @@ Route::apiResource('policy-requests', PolicyRequestController::class)
     ->parameters(['policy-requests' => 'id'])
     ->only(['index', 'store', 'show']);
 
+Route::post('policy-requests/{id}/submit', [PolicyRequestController::class, 'submit'])
+    ->name('policy-requests.submit');
+
 // ── Mock Insurer Simulation Endpoints ─────────────────────────────────────────
 Route::prefix('mock-insurer')->group(function () {
     Route::post('issue', [MockInsurerController::class, 'issue'])->name('mock-insurer.issue');

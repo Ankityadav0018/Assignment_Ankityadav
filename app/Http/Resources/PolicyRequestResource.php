@@ -58,6 +58,16 @@ class PolicyRequestResource extends JsonResource
                 ]);
             }),
 
+            // ── Issuance attempts (only when relationship is loaded) ───────────
+            'issuance_attempts'  => $this->whenLoaded('issuanceAttempts', function () {
+                return $this->issuanceAttempts->map(fn ($attempt) => [
+                    'attempt_no' => $attempt->attempt_no,
+                    'outcome'    => $attempt->outcome?->value ?? (string) $attempt->outcome,
+                    'error'      => $attempt->error,
+                    'at'         => $attempt->created_at?->toIso8601String(),
+                ]);
+            }),
+
             // ── Timestamps ────────────────────────────────────────────────────
             'created_at'         => $this->created_at?->toIso8601String(),
             'updated_at'         => $this->updated_at?->toIso8601String(),

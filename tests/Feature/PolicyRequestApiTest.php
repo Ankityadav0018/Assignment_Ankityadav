@@ -238,4 +238,83 @@ class PolicyRequestApiTest extends TestCase
         $emptyRes->assertStatus(200);
         $this->assertCount(0, $emptyRes->json('data'));
     }
+
+    // ── POST /api/policy-requests/{id}/submit Tests ───────────────────────────
+
+    public function test_submit_nonexistent_returns_404(): void
+    {
+        $this->requireDatabase();
+
+        $response = $this->postJson('/api/policy-requests/00000000-0000-0000-0000-000000000000/submit');
+        $response->assertStatus(404);
+    }
+
+    public function test_submit_success_flow_issues_policy(): void
+    {
+        $this->requireDatabase();
+
+        $payload = $this->validPayload();
+        $createRes = $this->postJson('/api/policy-requests', $payload);
+        $createRes->assertStatus(201);
+        $id = $createRes->json('data.id');
+
+        // Submit with default SUCCESS scenario
+        $submitRes = $this->postJson("/api/policy-requests/{$id}/submit");
+        $submitRes->assertStatus(200)
+            ->assertJsonPath('data.status', PolicyStatus::Issued->value)
+            ->assertJsonStructure([
+                'data' => [
+                    'id',
+                    'policy_number',
+                    'provider_reference',
+                    'attempt_count',
+                    'state_history',
+                    'issuance_attempts',
+                ],
+            ]);
+
+        $this->assertNotNull($submitRes->json('data.policy_number'));
+        $this->assertNotNull($submitRes->json('data.provider_reference'));
+        $this->assertSame(1, $submitRes->json('data.attempt_count'));
+
+        // Repeated submit returns 200 without duplicate issuance calls
+        $repeatRes = $this->postJson("/api/policy-requests/{$id}/submit");
+        $repeatRes->assertStatus(200);
+        $this->assertSame($submitRes->json('data.policy_number'), $repeatRes->json('data.policy_number'));
+    }
+
+    public function test_submit_temporary_failure_returns_503_and_returns_to_validated(): void
+    {
+        $this->requireDatabase();
+
+        $payload = $this->validPayload();
+        $createRes = $this->postJson('/api/policy-requests', $payload);
+        $id = $createRes->json('data.id');
+
+        $submitRes = $this->postJson("/api/policy-requests/{$id}/submit", [
+            'scenario' => 'TEMPORARY_FAILURE',
+        ]);
+
+        $submitRes->assertStatus(503)
+            ->assertJsonPath('data.status', PolicyStatus::Validated->value);
+
+        // Premium snapshot is untouched
+        $this->assertSame('225.00', $submitRes->json('data.premium_amount'));
+    }
+
+    public function test_submit_delayed_callback_returns_202_pending(): void
+    {
+        $this->requireDatabase();
+
+        $payload = $this->validPayload();
+        $createRes = $this->postJson('/api/policy-requests', $payload);
+        $id = $createRes->json('data.id');
+
+        $submitRes = $this->postJson("/api/policy-requests/{$id}/submit", [
+            'scenario' => 'DELAYED_CALLBACK',
+        ]);
+
+        $submitRes->assertStatus(202)
+            ->assertJsonPath('data.status', PolicyStatus::PendingConfirmation->value);
+    }
 }
