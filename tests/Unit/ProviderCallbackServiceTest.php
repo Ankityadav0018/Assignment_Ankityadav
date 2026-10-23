@@ -237,4 +237,29 @@ class ProviderCallbackServiceTest extends TestCase
         // Event was stored
         $this->assertNotNull(ProviderEvent::where('provider_event_id', $eventId)->first());
     }
+
+    // ── 7. Failure event moves PENDING_CONFIRMATION -> FAILED ─────────────────
+
+    public function test_failure_event_moves_pending_confirmation_to_failed(): void
+    {
+        $this->requireDatabase();
+
+        $ref = 'REF-' . uniqid();
+        $policy = $this->createPolicy(PolicyStatus::PendingConfirmation, $ref);
+
+        $eventId = 'EVT-' . uniqid();
+
+        $response = $this->service->handle([
+            'provider_event_id'  => $eventId,
+            'provider_reference' => $ref,
+            'policy_number'      => 'POL-FAILED',
+            'event_type'         => 'POLICY_FAILED',
+        ]);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('processed', $response->getData()->status);
+
+        $policy->refresh();
+        $this->assertSame(PolicyStatus::Failed, $policy->status);
+    }
 }

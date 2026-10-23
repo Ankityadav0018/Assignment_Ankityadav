@@ -70,6 +70,8 @@ class ProviderCallbackService
                 $eventType = strtoupper(trim((string) $data['event_type']));
                 $isSuccessEvent = in_array($eventType, ['POLICY_ISSUED', 'ISSUED', 'SUCCESS'], true);
 
+                $isFailureEvent = in_array($eventType, ['POLICY_FAILED', 'FAILED', 'REJECTED'], true);
+
                 $eligibleForIssuance = (
                     $policy->status === PolicyStatus::PendingConfirmation ||
                     $policy->status === PolicyStatus::NeedsReconciliation
@@ -83,6 +85,15 @@ class ProviderCallbackService
                         $policy,
                         PolicyStatus::Issued,
                         'Confirmed and issued via provider callback event.'
+                    );
+                } elseif ($isFailureEvent && $eligibleForIssuance) {
+                    $policy->last_error = $data['error'] ?? 'Provider callback reported failure.';
+                    $policy->save();
+
+                    $this->stateMachine->transition(
+                        $policy,
+                        PolicyStatus::Failed,
+                        'Failed via provider callback event.'
                     );
                 }
 
