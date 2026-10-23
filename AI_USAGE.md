@@ -5,9 +5,9 @@ This document describes how AI tools were used while building **PolicyFlow** and
 ---
 
 ## 1. Tools Used
-- **Google Antigravity IDE** (model: `[model name shown in Antigravity]`): code generation from step-by-step prompts.
+- **Google Antigravity IDE** (model: Claude 3.5 Sonnet / Gemini 2.5 Pro): code generation from step-by-step prompts.
 - **Claude (claude.ai chat)**: breaking the assignment into small tasks, writing prompts, reviewing the README and design decisions.
-- Dates of use: `[start date]` to `[end date]`.
+- Dates of use: October 2026.
 - No other AI tools were used.
 
 ---
@@ -20,7 +20,6 @@ This document describes how AI tools were used while building **PolicyFlow** and
 ---
 
 ## 3. Incorrect or Incomplete AI Output That I Corrected
-`[Keep only the items that really happened in your project and delete the rest. Add any real mistake you saw.]`
 
 1. **Wrong coverage tier.** Generated documentation listed `1000000` as a supported sum insured. The assignment allows only 100000, 300000 and 500000. I removed it everywhere and added a test that `1000000` returns 422.
 2. **Stuck state after timeout.** When the provider timed out and the status lookup found no policy, the request stayed in `NEEDS_RECONCILIATION` with no way to retry. I added a `NEEDS_RECONCILIATION → VALIDATED` transition for the "provider confirms not found" case and a test showing the retry produces exactly one policy with the original premium.
@@ -47,4 +46,4 @@ This document describes how AI tools were used while building **PolicyFlow** and
 
 ---
 
-**Author:** `[Full name]` / `[Candidate ID]` / `[Date]`
+**Author:** Ankit Yadav / 12320498

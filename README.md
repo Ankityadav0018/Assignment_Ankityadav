@@ -30,7 +30,7 @@ PolicyFlow is a travel insurance policy intake and issuance API built with **Lar
 
 ### 2. Clone and Install Dependencies
 ```bash
-git clone <repo-url> policyflow
+git clone https://github.com/Ankityadav0018/Assignment.git policyflow
 cd policyflow
 
 composer install
