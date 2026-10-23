@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'mock_insurer' => [
+        'scenario' => env('MOCK_INSURER_SCENARIO', 'SUCCESS'),
+        'callback_url' => env('MOCK_INSURER_CALLBACK_URL', null),
+    ],
+
 ];
