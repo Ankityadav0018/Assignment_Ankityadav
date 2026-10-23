@@ -104,7 +104,7 @@ final class PremiumCalculator
         // ── 3. Travel days (inclusive, minimum 1) ─────────────────────────────
         $start    = CarbonImmutable::instance($tripStart)->startOfDay();
         $end      = CarbonImmutable::instance($tripEnd)->startOfDay();
-        $travelDays = max(1, (int) $start->diffInDays($end) + 1);
+        $travelDays = max(1, ((int) $start->diffInDays($end)) + 1);
 
         // ── 4. Age at trip start ───────────────────────────────────────────────
         $dob = CarbonImmutable::instance($dateOfBirth)->startOfDay();
