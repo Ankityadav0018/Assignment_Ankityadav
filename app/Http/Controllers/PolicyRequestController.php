@@ -121,9 +121,11 @@ class PolicyRequestController extends Controller
      *
      * Route model binding resolves the UUID automatically via HasUuids.
      */
-    public function show(PolicyRequest $policyRequest): PolicyRequestResource
+    public function show(PolicyRequest|string $id): PolicyRequestResource
     {
-        $policyRequest->load('stateHistory');
+        $policyRequest = $id instanceof PolicyRequest
+            ? $id->loadMissing('stateHistory')
+            : PolicyRequest::with('stateHistory')->findOrFail($id);
 
         return PolicyRequestResource::make($policyRequest);
     }

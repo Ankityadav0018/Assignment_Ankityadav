@@ -26,12 +26,12 @@ class PolicyRequestResource extends JsonResource
 
             // ── Customer ──────────────────────────────────────────────────────
             'customer_name'      => $this->customer_name,
-            'date_of_birth'      => $this->date_of_birth->toDateString(),
+            'date_of_birth'      => $this->date_of_birth?->toDateString(),
 
             // ── Trip ──────────────────────────────────────────────────────────
-            'destination'        => $this->destination->value,
-            'trip_start'         => $this->trip_start->toDateString(),
-            'trip_end'           => $this->trip_end->toDateString(),
+            'destination'        => $this->destination?->value ?? (string) $this->destination,
+            'trip_start'         => $this->trip_start?->toDateString(),
+            'trip_end'           => $this->trip_end?->toDateString(),
             'travel_days'        => $this->travel_days,
 
             // ── Plan & pricing ────────────────────────────────────────────────
@@ -41,7 +41,7 @@ class PolicyRequestResource extends JsonResource
             'premium_breakdown'  => $this->premium_breakdown,
 
             // ── Workflow ──────────────────────────────────────────────────────
-            'status'             => $this->status->value,
+            'status'             => $this->status?->value ?? (string) $this->status,
             'attempt_count'      => $this->attempt_count,
 
             // ── Provider references ───────────────────────────────────────────
@@ -54,13 +54,13 @@ class PolicyRequestResource extends JsonResource
                     'from_status' => $entry->from_status,
                     'to_status'   => $entry->to_status,
                     'reason'      => $entry->reason,
-                    'at'          => $entry->created_at->toIso8601String(),
+                    'at'          => $entry->created_at?->toIso8601String(),
                 ]);
             }),
 
             // ── Timestamps ────────────────────────────────────────────────────
-            'created_at'         => $this->created_at->toIso8601String(),
-            'updated_at'         => $this->updated_at->toIso8601String(),
+            'created_at'         => $this->created_at?->toIso8601String(),
+            'updated_at'         => $this->updated_at?->toIso8601String(),
         ];
     }
 }

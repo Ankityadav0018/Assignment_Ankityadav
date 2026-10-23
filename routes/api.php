@@ -12,4 +12,5 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::apiResource('policy-requests', PolicyRequestController::class)
+    ->parameters(['policy-requests' => 'id'])
     ->only(['index', 'store', 'show']);
